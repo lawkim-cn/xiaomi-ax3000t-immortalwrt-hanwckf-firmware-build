@@ -113,7 +113,35 @@ jobs:
           git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall.git package/passwall-luci
 
           sed -i 's/ +lyaml//' package/passwall-luci/luci-app-passwall/Makefile || true
+          # 修正 Passwall 中文翻译（与本地 smpackage 的修改一致）
+          # AliCloud Conn. / Google Conn. / GitHub Conn. / YouTube Conn.
+          PO=package/passwall-luci/luci-app-passwall/po/zh-cn/passwall.po
+          test -f "$PO"
+          python3 - "$PO" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
 
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "AliCloud Conn.": "AliCloud",
+              "Google Conn.": "Google",
+              "GitHub Conn.": "GitHub",
+              "YouTube Conn.": "YouTube",
+          }
+          for msgid, msgstr in replacements.items():
+              pattern = re.compile(r'(msgid "%s"\nmsgstr )"[^"]*"' % re.escape(msgid))
+              text, count = pattern.subn(
+                  lambda m, value=msgstr: m.group(1) + '"%s"' % value, text
+              )
+              if count != 1:
+                  raise SystemExit("ERROR: %s 匹配到 %d 处（预期 1 处）" % (msgid, count))
+              print("OK: %s -> %s" % (msgid, msgstr))
+          path.write_text(text, encoding="utf-8")
+          PY
+          grep -A1 '^msgid "AliCloud Conn\."$' "$PO" | grep -q 'msgstr "AliCloud"'
+          
           # 替换 Passwall 状态页 (可选)
           STATUS_SRC=""
           if [ -n "${STATUS_URL:-}" ]; then
